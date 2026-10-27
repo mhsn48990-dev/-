@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>استوديو الدبلجة</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eceff4;--ink:#1b2433;--mute:#5b6577;--card:#fff;--line:#d3d9e3;--rec:#e5383b;--ok:#1f7a8c}
+@media (prefers-color-scheme:dark){:root{--bg:#141922;--ink:#e8ecf3;--mute:#9aa5b8;--card:#1d2431;--line:#2f394b;--rec:#ff5a5d;--ok:#2a8fa3}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Cairo,Tahoma,sans-serif;line-height:1.7}
+main{max-width:900px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:2rem;font-weight:800;margin:0 0 4px}
+p.sub{margin:0 0 16px;color:var(--mute)}
+.stage{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;position:relative}
+video{width:100%;display:block;background:#000;max-height:56vh}
+video[hidden]{display:none}
+.empty{padding:48px 16px;text-align:center}
+.empty label{display:inline-block;margin-top:8px}
+#count{position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.55);color:#fff;font-size:6rem;font-weight:800}
+.bar{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;align-items:center}
+button,.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:9px 16px;border-radius:10px;cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,.btn:focus-visible,input:focus-visible{outline:3px solid var(--ok);outline-offset:2px}
+.rec{background:var(--rec);border-color:var(--rec);color:#fff}
+.rec.live{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.65}}
+@media (prefers-reduced-motion:reduce){.rec.live{animation:none}}
+.main{background:var(--ok);border-color:var(--ok);color:#fff}
+.sm{padding:4px 12px;font-size:.9rem}
+.tl{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:14px 0}
+.tlbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;color:var(--mute);font-size:.9rem}
+.tlbar .sp{flex:1}
+.lanes{position:relative;direction:ltr;user-select:none;touch-action:none;cursor:pointer}
+.lane{height:40px;border-radius:8px;background:var(--bg);position:relative;margin-bottom:8px;overflow:hidden}
+.lane.voice{height:72px}
+.vbar{position:absolute;inset:0;background:var(--line);display:grid;place-items:center;color:var(--mute);font-size:.85rem}
+.vhint{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute);font-size:.85rem;direction:rtl;pointer-events:none}
+.clip{position:absolute;top:0;bottom:0;background:var(--ok);border-radius:6px;cursor:grab;overflow:hidden;min-width:8px}
+.clip canvas{width:100%;height:100%;display:block;pointer-events:none}
+.clip .h{position:absolute;top:0;bottom:0;width:10px;cursor:ew-resize;background:rgba(0,0,0,.4)}
+.clip .hl{left:0}.clip .hr{right:0}
+.ph{position:absolute;top:0;bottom:0;width:2px;background:var(--rec);pointer-events:none;left:0}
+.opts{display:grid;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.opts label{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.opts h2{font-size:1rem;margin:6px 0 0;color:var(--mute);font-weight:600}
+input[type=range]{flex:1;min-width:160px}
+#status{margin:14px 0 0;color:var(--mute);min-height:1.7em}
+#out a{display:inline-block;margin:10px 10px 0 0;text-decoration:none}
+input[type=file]{display:none}
+#mic.ok{color:var(--ok);font-weight:600}
+</style>
+</head>
+<body>
+<main>
+  <h1>استوديو الدبلجة</h1>
+  <p class="sub">اختار الفيديو، سجّل صوتك على مسار لوحده، رتّبه على التايم لاين، وصدّر النتيجة.</p>
+
+  <div class="bar" style="margin-top:0">
+    <span id="mic">بيوصّل المايك...</span>
+    <button id="micBtn" hidden>وصّل المايك</button>
+  </div>
+
+  <div class="stage">
+    <div class="empty" id="empty">
+      <div>ابدأ باختيار فيديو من استوديو الموبايل أو من الكمبيوتر</div>
+      <label class="btn main" for="file" tabindex="0">اختار فيديو</label>
+    </div>
+    <video id="v" playsinline controls hidden></video>
+    <div id="count"></div>
+  </div>
+  <input type="file" id="file" accept="video/*">
+
+  <div class="bar">
+    <button id="recBtn" class="rec" disabled>ابدأ التسجيل</button>
+    <button id="stopBtn" disabled>إيقاف</button>
+    <button id="prevBtn" disabled>شغّل بصوتي</button>
+    <button id="expBtn" class="main" disabled>صدّر الفيديو المدبلج</button>
+    <label class="btn" for="file">غيّر الفيديو</label>
+    <label class="btn" for="voiceFile">ارفع تسجيل صوتي جاهز</label>
+    <input type="file" id="voiceFile" accept="audio/*">
+  </div>
+
+  <section class="tl" id="tl" hidden aria-label="التايم لاين">
+    <div class="tlbar">
+      <span id="time">0.00 / 0.00ث</span>
+      <span class="sp"></span>
+      <span id="clipInfo"></span>
+      <button class="sm" id="nudgeL" disabled>أبكّر صوتي 50ms</button>
+      <button class="sm" id="nudgeR" disabled>أأخّر صوتي 50ms</button>
+    </div>
+    <div class="lanes" id="lanes">
+      <div class="lane"><div class="vbar">مسار الفيديو</div></div>
+      <div class="lane voice" id="vlane">
+        <div class="vhint" id="vhint">لسه مفيش صوت. سجّل أو ارفع صوت وهيظهر هنا، واسحبه يمين وشمال أو قصّه من الطرفين.</div>
+        <div class="clip" id="clip" hidden><div class="h hl"></div><canvas id="clipCv" height="72"></canvas><div class="h hr"></div></div>
+      </div>
+      <div class="ph" id="ph"></div>
+    </div>
+  </section>
+
+  <div class="opts">
+    <h2>مستوى الصوت</h2>
+    <label>صوتي المسجّل:
+      <input type="range" id="voiceVol" min="0" max="200" step="5" value="100" aria-label="مستوى صوتي">
+      <span id="voiceVolv"></span>
+    </label>
+    <label>الصوت الأصلي للفيديو (صفر = مكتوم تماما):
+      <input type="range" id="orig" min="0" max="100" step="5" value="0" aria-label="مستوى الصوت الأصلي">
+      <span id="origv"></span>
+    </label>
+    <label><input type="checkbox" id="guide"> أسمع الصوت الأصلي أثناء التسجيل (استخدم سماعات عشان ميتسجلش معاك)</label>
+
+    <h2>مؤثرات الصوت</h2>
+    <label><input type="checkbox" id="fxOn"> تأثير الراديو القديم (صوت ألاستر)</label>
+    <label>قص الترددات العميقة (High-pass)
+      <input type="range" id="fxLow" min="100" max="600" step="10" value="300" aria-label="قص الترددات العميقة"><span id="fxLowv"></span></label>
+    <label>قص الترددات العالية (Low-pass)
+      <input type="range" id="fxHigh" min="2500" max="8000" step="100" value="4500" aria-label="قص الترددات العالية"><span id="fxHighv"></span></label>
+    <label>رفع الترددات المتوسطة (Mid boost)
+      <input type="range" id="fxMid" min="0" max="12" step="1" value="6" aria-label="رفع الترددات المتوسطة"><span id="fxMidv"></span></label>
+    <label>قوة فلتر الراديو
+      <input type="range" id="fxRadio" min="0" max="100" step="5" value="100" aria-label="قوة فلتر الراديو"><span id="fxRadiov"></span></label>
+    <label>تشويش وخرخشة (Static)
+      <input type="range" id="fxStatic" min="0" max="100" step="5" value="20" aria-label="التشويش"><span id="fxStaticv"></span></label>
+    <label>تشبّع (Distortion)
+      <input type="range" id="fxDist" min="0" max="100" step="5" value="25" aria-label="التشبع"><span id="fxDistv"></span></label>
+    <label>نسخة مزدوجة أعمق (Double Track)
+      <input type="range" id="fxDbl" min="0" max="100" step="5" value="30" aria-label="النسخة المزدوجة"><span id="fxDblv"></span></label>
+    <label>عمق النسخة المزدوجة (أنصاف نغمات لتحت)
+      <input type="range" id="fxSemi" min="1" max="6" step="1" value="2" aria-label="عمق النسخة المزدوجة"><span id="fxSemiv"></span></label>
+  </div>
+
+  <p id="status" role="status">محتاج فيديو الأول.</p>
+  <progress id="prog" max="1" value="0" hidden style="width:100%;margin-top:8px"></progress>
+  <div id="out"></div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const v = $('v'), st = $('status'), out = $('out'), lanes = $('lanes'), clipEl = $('clip'), clipCv = $('clipCv'), ph = $('ph');
+let stream, rec, chunks = [], voiceURL = null, voiceBlob = null, buf = null, D = 0;
+let recording = false, exporting = false, dcx = null, pAC = null, pFx = null, lastExport = null, timers = [];
+const voice = new Audio();
+const clip = {in: 0, out: 0, start: 0};   // in/out = قص من ملف الصوت، start = مكانه على التايم لاين
+const say = t => st.textContent = t;
+const val = id => +$(id).value;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const fmt = s => (isFinite(s) ? s : 0).toFixed(2);
+const clearT = () => { timers.forEach(clearTimeout); timers = []; };
+
+/* ---------- المايك ---------- */
+async function connectMic(){
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    $('mic').textContent = 'المتصفح ده قافل المايك على الصفحة دي (غالبا لأن الملف اتفتح من تطبيق أو معاينة). افتح الملف في Chrome مباشرة، أو استخدم زرار "ارفع تسجيل صوتي جاهز".';
+    $('micBtn').hidden = true;
+    return false;
+  }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
+    const tr = stream.getAudioTracks()[0];
+    $('mic').textContent = 'المايك متصل: ' + (tr.label || 'الميكروفون');
+    $('mic').className = 'ok'; $('micBtn').hidden = true;
+    tr.onended = () => { $('mic').textContent = 'المايك اتفصل.'; $('mic').className = ''; $('micBtn').hidden = false; };
+    return true;
+  } catch (err) {
+    const msgs = {
+      NotAllowedError: 'المايك متحظر. دوس على أيقونة القفل جنب العنوان ← إعدادات الموقع ← الميكروفون ← سماح، وبعدين دوس "وصّل المايك".',
+      NotFoundError: 'مفيش ميكروفون متوصّل بالجهاز. وصّل واحد وبعدين دوس "وصّل المايك".',
+      NotReadableError: 'برنامج تاني شاغل المايك (زي Zoom أو Teams). اقفله وبعدين دوس "وصّل المايك".'
+    };
+    $('mic').textContent = msgs[err.name] || ('المايك مش متصل (' + err.name + '). جرّب Chrome، أو استخدم "ارفع تسجيل صوتي جاهز".');
+    $('mic').className = ''; $('micBtn').hidden = false;
+    return false;
+  }
+}
+$('micBtn').onclick = connectMic;
+window.addEventListener('load', connectMic);
+
+function pickMime(list){ return list.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || ''; }
+
+/* ---------- مؤثرات الصوت ---------- */
+const FX_IDS = ['fxLow','fxHigh','fxMid','fxRadio','fxStatic','fxDist','fxDbl','fxSemi'];
+const FX_PRESET = {fxLow:300, fxHigh:4500, fxMid:6, fxRadio:100, fxStatic:20, fxDist:25, fxDbl:30, fxSemi:2};
+const FX_UNIT = {fxLow:' Hz', fxHigh:' Hz', fxMid:' dB', fxSemi:' نغمة'};
+const showVals = () => [...FX_IDS, 'voiceVol', 'orig'].forEach(id => $(id + 'v').textContent = $(id).value + (FX_UNIT[id] || '%'));
+const fxVals = () => {
+  const vol = val('voiceVol') / 100;
+  return $('fxOn').checked
+    ? {vol, lo:val('fxLow'), hi:val('fxHigh'), mid:val('fxMid'), r:val('fxRadio')/100, s:val('fxStatic')/100, d:val('fxDist')/100, db:val('fxDbl')/100, sm:val('fxSemi')}
+    : {vol, lo:300, hi:4500, mid:0, r:0, s:0, d:0, db:0, sm:2};
+};
+FX_IDS.forEach(id => $(id).oninput = () => { $('fxOn').checked = true; showVals(); pFx && pFx.set(); });
+$('fxOn').onchange = () => {
+  if ($('fxOn').checked) for (const k in FX_PRESET) $(k).value = FX_PRESET[k];
+  showVals(); pFx && pFx.set();
+};
+$('voiceVol').oninput = () => { showVals(); pFx && pFx.set(); };
+$('orig').oninput = () => { showVals(); applyMix(); };
+showVals();
+
+function pitchShifter(ctx, input, output){
+  const bt = 0.1, ft = 0.05, sr = ctx.sampleRate;
+  const L1 = Math.round(bt * sr), L2 = Math.round((bt - 2 * ft) * sr), L = L1 + L2, fl = ft * sr;
+  const ramp = ctx.createBuffer(1, L, sr), fade = ctx.createBuffer(1, L, sr);
+  const rd = ramp.getChannelData(0), fd = fade.getChannelData(0);
+  for (let i = 0; i < L1; i++) {
+    rd[i] = i / L1;
+    fd[i] = i < fl ? Math.sqrt(i / fl) : i >= L1 - fl ? Math.sqrt(1 - (i - (L1 - fl)) / fl) : 1;
+  }
+  const mk = b => { const n = ctx.createBufferSource(); n.buffer = b; n.loop = true; return n; };
+  const m1 = mk(ramp), m2 = mk(ramp), f1 = mk(fade), f2 = mk(fade);
+  const g1 = ctx.createGain(), g2 = ctx.createGain(), d1 = ctx.createDelay(1), d2 = ctx.createDelay(1);
+  const x1 = ctx.createGain(), x2 = ctx.createGain();
+  d1.delayTime.value = 0; d2.delayTime.value = 0; x1.gain.value = 0; x2.gain.value = 0;
+  m1.connect(g1); g1.connect(d1.delayTime); m2.connect(g2); g2.connect(d2.delayTime);
+  f1.connect(x1.gain); f2.connect(x2.gain);
+  input.connect(d1); input.connect(d2); d1.connect(x1); d2.connect(x2); x1.connect(output); x2.connect(output);
+  const t = ctx.currentTime + 0.05;
+  m1.start(t); f1.start(t); m2.start(t + bt - ft); f2.start(t + bt - ft);
+  return semis => { const amt = 0.1 * (1 - Math.pow(2, -semis / 12)); g1.gain.value = amt; g2.gain.value = amt; };
+}
+
+function makeFx(ctx, src, out){
+  const dry = ctx.createGain(), wet = ctx.createGain(), sum = ctx.createGain(), dbl = ctx.createGain();
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass';
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass';
+  const pk = ctx.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 1800; pk.Q.value = 1;
+  const drive = ctx.createGain(), sh = ctx.createWaveShaper(), comp = ctx.createDynamicsCompressor(), post = ctx.createGain();
+  sh.oversample = '2x';
+  src.connect(dry); src.connect(hp); hp.connect(lp); lp.connect(pk); pk.connect(wet);
+  const setPitch = pitchShifter(ctx, src, dbl);
+  dry.connect(sum); wet.connect(sum); dbl.connect(sum);
+  sum.connect(drive); drive.connect(sh); sh.connect(comp); comp.connect(post); post.connect(out);
+
+  const noiseGain = ctx.createGain(), nf = ctx.createBiquadFilter();
+  nf.type = 'bandpass'; nf.frequency.value = 2600; nf.Q.value = 0.5;
+  nf.connect(noiseGain); noiseGain.connect(out);
+  const nbuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const nd = nbuf.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) {
+    let x = (Math.random() * 2 - 1) * 0.5;
+    if (Math.random() < 0.0008) x += (Math.random() * 2 - 1) * 1.6;
+    nd[i] = x;
+  }
+  let ns = null;
+
+  function set(){
+    const f = fxVals();
+    hp.frequency.value = f.lo; lp.frequency.value = f.hi; pk.gain.value = f.mid;
+    wet.gain.value = f.r; dry.gain.value = 1 - f.r;
+    dbl.gain.value = f.db * 0.6; setPitch(f.sm);
+    drive.gain.value = 1 + f.d * 5;
+    const k = f.d * 60, n = 2048, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = i * 2 / n - 1; curve[i] = f.d === 0 ? x : (1 + k) * x / (1 + k * Math.abs(x)); }
+    sh.curve = curve;
+    post.gain.value = 0.9 * f.vol;
+    noiseGain.gain.value = f.s * 0.12;
+  }
+  set();
+  return {
+    set,
+    startNoise(){ this.stopNoise(); ns = ctx.createBufferSource(); ns.buffer = nbuf; ns.loop = true; ns.connect(nf); ns.start(); },
+    stopNoise(){ if (ns) { try { ns.stop(); } catch (e) {} ns.disconnect(); ns = null; } }
+  };
+}
+
+function playVoice(){
+  if (!pAC) { pAC = new AudioContext(); pFx = makeFx(pAC, pAC.createMediaElementSource(voice), pAC.destination); }
+  pAC.resume(); pFx.set();
+  const p = voice.play(); pFx.startNoise();
+  return p;
+}
+
+/* ---------- التايم لاين: مسار الصوت ---------- */
+// عند وقت t في الفيديو: إمتى يبدأ الصوت، من أي نقطة في الملف، وإمتى يقف
+function plan(t){
+  const a = t - clip.start + clip.in;
+  if (!buf || a >= clip.out) return null;
+  const from = Math.max(a, clip.in);
+  return {from, delay: Math.max(0, clip.start - t), play: clip.out - from};
+}
+function schedVoice(t){
+  clearT(); voice.pause(); pFx && pFx.stopNoise();
+  const p = plan(t); if (!p) return;
+  voice.currentTime = p.from;
+  timers.push(setTimeout(() => { if (!v.paused) playVoice(); }, p.delay * 1000));
+  timers.push(setTimeout(() => { voice.pause(); pFx && pFx.stopNoise(); }, (p.delay + p.play) * 1000));
+}
+function applyMix(){
+  if (recording) return;
+  if (!buf) { v.muted = false; v.volume = 1; return; }
+  const o = val('orig') / 100; v.muted = o === 0; v.volume = o;
+}
+
+function layout(redraw){
+  const has = !!buf && D > 0;
+  clipEl.hidden = !has; $('vhint').hidden = has;
+  $('nudgeL').disabled = $('nudgeR').disabled = !has;
+  if (!has) { $('clipInfo').textContent = ''; return; }
+  clipEl.style.left = (clip.start / D * 100) + '%';
+  clipEl.style.width = ((clip.out - clip.in) / D * 100) + '%';
+  $('clipInfo').textContent = 'الصوت يبدأ عند ' + fmt(clip.start) + 'ث وطوله ' + fmt(clip.out - clip.in) + 'ث';
+  if (redraw) wave();
+}
+function wave(){
+  const w = Math.max(8, Math.round(clipEl.clientWidth)), h = 72;
+  clipCv.width = w; clipCv.height = h;
+  const c = clipCv.getContext('2d'); c.clearRect(0, 0, w, h); c.fillStyle = 'rgba(255,255,255,.9)';
+  const ch = buf.getChannelData(0), n = ch.length, sr = buf.sampleRate;
+  const per = (clip.out - clip.in) * sr / w, off = clip.in * sr;
+  for (let x = 0; x < w; x++) {
+    const a = Math.floor(off + x * per), b = Math.min(n, Math.floor(off + (x + 1) * per));
+    const step = Math.max(1, Math.floor((b - a) / 40));
+    let mx = 0; for (let i = a; i < b; i += step) mx = Math.max(mx, Math.abs(ch[i]));
+    const hh = Math.max(1, mx * h * 0.9); c.fillRect(x, (h - hh) / 2, 1, hh);
+  }
+}
+function shift(c0, dt){
+  let s = c0.start + dt, i = c0.in, o = c0.out;
+  if (s < 0) { i = Math.min(o - 0.1, i - s); s = 0; }
+  if (s + (o - i) > D) { s = Math.max(0, D - (o - i)); if (s + (o - i) > D) o = i + (D - s); }
+  return {start: s, in: i, out: o};
+}
+function afterEdit(){ if (!v.paused && buf && !recording) schedVoice(v.currentTime); }
+
+clipEl.onpointerdown = e => {
+  if (!buf || !D) return;
+  e.stopPropagation();
+  const mode = e.target.classList.contains('hl') ? 'l' : e.target.classList.contains('hr') ? 'r' : 'm';
+  const W = lanes.clientWidth, x0 = e.clientX, c0 = {...clip};
+  clipEl.setPointerCapture(e.pointerId);
+  clipEl.onpointermove = ev => {
+    const dt = (ev.clientX - x0) / W * D;
+    if (mode === 'm') Object.assign(clip, shift(c0, dt));
+    else if (mode === 'l') { const d = clamp(dt, -Math.min(c0.in, c0.start), (c0.out - c0.in) - 0.1); Object.assign(clip, {in: c0.in + d, start: c0.start + d}); }
+    else clip.out = clamp(c0.out + dt, c0.in + 0.1, Math.min(buf.duration, c0.in + (D - c0.start)));
+    layout(mode !== 'm');
+  };
+  clipEl.onpointerup = () => { clipEl.onpointermove = null; clipEl.onpointerup = null; layout(true); afterEdit(); };
+};
+const nudge = d => { Object.assign(clip, shift({...clip}, d)); layout(true); afterEdit(); };
+$('nudgeL').onclick = () => nudge(-0.05);
+$('nudgeR').onclick = () => nudge(0.05);
+
+lanes.onpointerdown = e => {
+  if (!D || e.target.closest('.clip')) return;
+  const r = lanes.getBoundingClientRect();
+  v.currentTime = clamp((e.clientX - r.left) / r.width, 0, 1) * D;
+};
+
+function tick(){
+  ph.style.left = (D ? clamp(v.currentTime / D, 0, 1) * 100 : 0) + '%';
+  $('time').textContent = fmt(v.currentTime) + ' / ' + fmt(D) + 'ث';
+  if (!v.paused) requestAnimationFrame(tick);
+}
+v.addEventListener('play', () => requestAnimationFrame(tick));
+v.addEventListener('pause', tick);
+v.addEventListener('seeked', tick);
+window.addEventListener('resize', () => buf && layout(true));
+
+async function loadVoice(blob){
+  try {
+    dcx = dcx || new AudioContext();
+    buf = await dcx.decodeAudioData(await blob.arrayBuffer());
+  } catch (e) {
+    buf = null; layout(true);
+    say('مقدرتش أقرأ ملف الصوت ده. جرّب تسجيل تاني أو ملف MP3 أو WAV أو M4A.');
+    return false;
+  }
+  voiceBlob = blob;
+  if (voiceURL) URL.revokeObjectURL(voiceURL);
+  voiceURL = URL.createObjectURL(blob); voice.src = voiceURL;
+  D = v.duration || buf.duration;
+  clip.in = 0; clip.start = 0; clip.out = Math.min(buf.duration, D);
+  layout(true); applyMix();
+  $('prevBtn').disabled = false; $('expBtn').disabled = false;
+  return true;
+}
+
+/* ---------- الفيديو ---------- */
+$('file').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  clearT(); voice.pause(); pFx && pFx.stopNoise();
+  v.src = URL.createObjectURL(f);
+  v.hidden = false; $('empty').hidden = true;
+  buf = null; voiceBlob = null; out.innerHTML = ''; layout(true); applyMix();
+  ['prevBtn','expBtn'].forEach(i => $(i).disabled = true);
+  $('recBtn').disabled = false;
+  say('الفيديو جاهز. اضغط "ابدأ التسجيل" أو ارفع تسجيل صوتي جاهز.');
+};
+v.onloadedmetadata = () => { D = v.duration || 0; $('tl').hidden = false; layout(true); tick(); };
+v.onerror = () => say('الفيديو ده مش بيشتغل في المتصفح. جرّب ملف MP4 (H.264) أو WebM.');
+
+v.onplay = () => { if (buf && !recording && !exporting) schedVoice(v.currentTime); };
+v.onpause = () => { clearT(); voice.pause(); pFx && pFx.stopNoise(); };
+v.onseeked = () => { if (buf && !recording && !exporting && !v.paused) schedVoice(v.currentTime); };
+
+/* ---------- التسجيل ---------- */
+$('recBtn').onclick = async () => {
+  if (!stream || !stream.active) { if (!await connectMic()) return; }
+  recording = true; clearT(); voice.pause(); pFx && pFx.stopNoise();
+  v.pause(); v.currentTime = 0; v.controls = false;
+  v.muted = !$('guide').checked; v.volume = 1;
+  ['recBtn','prevBtn','expBtn'].forEach(i => $(i).disabled = true);
+  const c = $('count'); c.style.display = 'grid';
+  for (let n = 3; n > 0; n--) { c.textContent = n; await new Promise(r => setTimeout(r, 900)); }
+  c.style.display = 'none';
+  chunks = [];
+  const mime = pickMime(['audio/webm;codecs=opus','audio/webm','audio/mp4']);
+  rec = new MediaRecorder(stream, mime ? {mimeType: mime} : undefined);
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = finish;
+  rec.start();
+  v.play(); v.onended = stopRec;
+  $('recBtn').classList.add('live'); $('recBtn').textContent = 'بيسجّل...';
+  $('stopBtn').disabled = false;
+  say('اتكلم دلوقتي. هيقف لوحده لما الفيديو يخلص.');
+};
+function stopRec(){ if (rec && rec.state !== 'inactive') rec.stop(); v.pause(); }
+$('stopBtn').onclick = stopRec;
+
+async function finish(){
+  recording = false; v.onended = null; v.controls = true;
+  const b = $('recBtn'); b.classList.remove('live'); b.textContent = 'سجّل تاني'; b.disabled = false;
+  $('stopBtn').disabled = true;
+  const blob = new Blob(chunks, {type: rec.mimeType || 'audio/webm'});
+  if (await loadVoice(blob)) {
+    const ext = blob.type.includes('mp4') ? 'm4a' : 'webm';
+    out.innerHTML = '<a class="btn" download="my-voice.' + ext + '" href="' + voiceURL + '">حمّل صوتي بس</a>';
+    say('اتسجّل. اضغط "شغّل بصوتي"، واسحب الصوت على التايم لاين لو محتاج تظبط التوقيت.');
+  } else { $('recBtn').disabled = false; applyMix(); }
+}
+
+$('voiceFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (!v.src) { say('اختار الفيديو الأول وبعدين ارفع الصوت.'); return; }
+  if (await loadVoice(f)) { out.innerHTML = ''; say('الصوت اتحمّل على التايم لاين. اسحبه أو قصّه وبعدين اضغط "شغّل بصوتي".'); }
+};
+
+$('prevBtn').onclick = async () => {
+  v.currentTime = 0; applyMix();
+  await v.play();
+  say('بيشتغل بصوتك. اسحب الصوت على التايم لاين أو استخدم أزرار التقديم والتأخير لضبط حركة الشفايف.');
+};
+
+/* ---------- التصدير ---------- */
+const ready = el => new Promise((res, rej) => {
+  if (el.readyState >= 3) return res();
+  const t = setTimeout(res, 8000);
+  el.oncanplaythrough = () => { clearTimeout(t); res(); };
+  el.onerror = () => { clearTimeout(t); rej(new Error('load')); };
+});
+
+$('expBtn').onclick = async () => {
+  if (!buf || !window.MediaRecorder) {
+    say('المتصفح ده مش بيدعم التصدير. جرّب Chrome أو Edge، أو حمّل صوتك وركّبه في برنامج مونتاج.');
+    return;
+  }
+  const lock = on => ['recBtn','prevBtn','expBtn'].forEach(i => $(i).disabled = on);
+  const prog = $('prog');
+  exporting = true; lock(true); v.pause(); clearT(); voice.pause(); pFx && pFx.stopNoise();
+  prog.hidden = false; prog.value = 0;
+
+  const v2 = document.createElement('video');
+  v2.playsInline = true; v2.preload = 'auto'; v2.src = v.currentSrc || v.src;
+  const a2 = new Audio(voiceURL); a2.preload = 'auto';
+  const keep = val('orig') / 100;
+  v2.muted = keep === 0;
+  const tm = [];
+  let ac, mr;
+  const cleanup = () => {
+    tm.forEach(clearTimeout);
+    try { ac && ac.close(); } catch (e) {}
+    v2.pause(); a2.pause(); v2.removeAttribute('src'); v2.load();
+    exporting = false; lock(false); prog.hidden = true;
+  };
+
+  try {
+    say('بيجهّز التصدير...');
+    await Promise.all([ready(v2), ready(a2)]);
+    const cap = v2.captureStream || v2.mozCaptureStream;
+    if (!cap) throw new Error('nocap');
+    const cs = cap.call(v2);
+
+    ac = new AudioContext();
+    const dest = ac.createMediaStreamDestination();
+    const fx = makeFx(ac, ac.createMediaElementSource(a2), dest);
+    if (keep > 0) {
+      const g = ac.createGain(); g.gain.value = keep;
+      ac.createMediaElementSource(v2).connect(g); g.connect(dest);
+    }
+    await ac.resume();
+
+    const p = plan(0);
+    a2.currentTime = p ? p.from : 0;
+    await v2.play();
+    let vt = cs.getVideoTracks();
+    if (!vt.length) { await new Promise(r => setTimeout(r, 300)); vt = cs.getVideoTracks(); }
+    if (!vt.length) throw new Error('nocap');
+
+    const mixed = new MediaStream([...vt, ...dest.stream.getAudioTracks()]);
+    const mime = pickMime(['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1,mp4a','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm']);
+    const px = (v.videoWidth || 1280) * (v.videoHeight || 720);
+    const opts = {videoBitsPerSecond: Math.min(12e6, Math.max(2.5e6, Math.round(px * 30 * 0.12))), audioBitsPerSecond: 160000};
+    if (mime) opts.mimeType = mime;
+    const parts = [];
+    mr = new MediaRecorder(mixed, opts);
+    mr.ondataavailable = e => e.data.size && parts.push(e.data);
+    mr.onerror = () => { say('حصل خطأ أثناء التصدير. جرّب تاني أو استخدم Chrome.'); cleanup(); };
+    mr.onstop = () => {
+      const type = mr.mimeType || 'video/webm';
+      const blob = new Blob(parts, {type});
+      const ext = type.includes('mp4') ? 'mp4' : 'webm';
+      if (lastExport) URL.revokeObjectURL(lastExport);
+      lastExport = URL.createObjectURL(blob);
+      const old = $('dl'); if (old) old.remove();
+      out.insertAdjacentHTML('afterbegin', '<a id="dl" class="btn main" download="dubbed.' + ext + '" href="' + lastExport + '">حمّل الفيديو المدبلج (' + (blob.size / 1048576).toFixed(1) + ' ميجا)</a>');
+      say('خلص التصدير. حمّل الفيديو.');
+      cleanup();
+    };
+
+    v2.ontimeupdate = () => { prog.value = Math.min(1, v2.currentTime / (v.duration || v2.duration || 1)); };
+    v2.onended = () => { a2.pause(); fx.stopNoise(); setTimeout(() => mr.state !== 'inactive' && mr.stop(), 200); };
+    mr.start(500);
+    if (p) {
+      tm.push(setTimeout(() => { fx.startNoise(); a2.play(); }, p.delay * 1000));
+      tm.push(setTimeout(() => { a2.pause(); fx.stopNoise(); }, (p.delay + p.play) * 1000));
+    }
+    say('بيصدّر بسرعة التشغيل العادية. سيب الصفحة مفتوحة لحد ما الشريط يخلص.');
+  } catch (err) {
+    say(err.message === 'nocap'
+      ? 'المتصفح ده مش بيدعم تصدير الفيديو. استخدم Chrome أو Edge، أو حمّل صوتك وركّبه في برنامج مونتاج.'
+      : 'مقدرتش أجهّز الفيديو للتصدير. جرّب ملف MP4 تاني.');
+    cleanup();
+  }
+};
+</script>
+</body>
+</html>
